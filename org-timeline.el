@@ -78,6 +78,9 @@ Clocked blocks appear in the agenda when `org-agenda-log-mode' is
 activated."
   :group 'org-timeline-faces)
 
+(defcustom org-timeline-default-duration
+  nil
+  "Default event duration for org-timeline")
 
 (defmacro org-timeline-with-each-line (&rest body)
   "Execute BODY on each line in buffer."
@@ -101,6 +104,7 @@ activated."
         (search-forward "Clocked:" (line-end-position) t))
       'org-timeline-clocked)
      (t 'org-timeline-block))))
+
 
 (defun org-timeline--add-elapsed-face (string current-offset)
   "Add `org-timeline-elapsed' to STRING's elapsed portion.
@@ -137,9 +141,9 @@ Return new copy of STRING."
             (let* ((hour (/ time-of-day 100))
                    (minute (mod time-of-day 100))
                    (beg (+ (* hour 60) minute))
-                   (end (if duration
-                            (round (+ beg duration))
-                          current-time))
+                   (end (cond ((and (numberp duration) (< 0 duration))  (round (+ beg duration)))
+			      ((and org-timeline-default-duration (round (+ beg org-timeline-default-duration))))
+			      (t beg)))
                    (face (org-timeline--get-face)))
               (when (>= beg start-offset)
                 (push (list beg end face) tasks)))))))
