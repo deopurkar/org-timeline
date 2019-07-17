@@ -169,9 +169,9 @@ Return new copy of STRING."
 		    (beg-in-day (% beg 1440))
 		    (end-in-day (% end 1440)))
 		(when (not current-day) (setq current-day new-current-day))
-		(when (< current-day new-current-day)               ;; We have advanced a day
+		(while (< current-day new-current-day)               ;; We have advanced a day
 		  (cl-incf current-line)
-		  (setq current-day new-current-day)
+		  (cl-incf current-day)
 		  (save-excursion
                     (goto-char (point-max))
                     (insert "\n" slotline)))
