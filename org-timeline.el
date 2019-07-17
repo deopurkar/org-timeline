@@ -133,40 +133,49 @@ Return new copy of STRING."
       (-when-let* ((time-of-day (org-get-at-bol 'time-of-day))
                    (marker (org-get-at-bol 'org-marker))
                    (type (org-get-at-bol 'type)))
+	(message (number-to-string (second (org-get-at-bol 'date))))
+	(message (number-to-string (org-get-at-bol 'time-of-day)))
         (when (member type (list "scheduled" "clock" "timestamp"))
-          (let ((duration (org-get-at-bol 'duration)))
-            (when (and (numberp duration)
-                       (< duration 0))
+          (let ((duration (or (org-get-at-bol 'duration)
+			      org-timeline-default-duration
+			      0)))
+            (when (and (numberp duration)            
+                       (< duration 0))            ;; This is events at midnight
               (cl-incf duration 1440))
-            (let* ((hour (/ time-of-day 100))
+
+            (let* ((hour (/ time-of-day 100))     ;; time-of-day is in HHMM notation
                    (minute (mod time-of-day 100))
-                   (beg (+ (* hour 60) minute))
-                   (end (cond ((and (numberp duration) (< 0 duration))  (round (+ beg duration)))
-			      ((and org-timeline-default-duration (round (+ beg org-timeline-default-duration))))
-			      (t beg)))
+		   (day-of-month (second (org-get-at-bol 'date)))
+                   (beg (+ (* day-of-month 1440) (* hour 60) minute))
+                   (end (round (+ beg duration)))
                    (face (org-timeline--get-face)))
-              (when (>= beg start-offset)
-                (push (list beg end face) tasks)))))))
+	      (push (list beg end face) tasks))))))
+
     (setq tasks (nreverse tasks))
     (cl-labels ((get-start-pos (current-line beg) (+ 1 (* current-line (1+ (length slotline))) (/ (- beg start-offset) 10)))
                 (get-end-pos (current-line end) (+ 1 (* current-line (1+ (length slotline))) (/ (- end start-offset) 10))))
-      (let ((current-line 1))
+      (let ((current-line 1)
+	    (current-day nil))
         (with-temp-buffer
           (insert timeline)
           (-each tasks
             (-lambda ((beg end face))
-              (while (get-text-property (get-start-pos current-line beg) 'org-timeline-occupied)
-                (cl-incf current-line)
-                (when (> (get-start-pos current-line beg) (point-max))
-                  (save-excursion
+	      (let ((new-current-day (/ beg 1440))
+		    (beg-in-day (% beg 1440))
+		    (end-in-day (% end 1440)))
+		(when (not current-day) (setq current-day new-current-day))
+		(when (< current-day new-current-day)               ;; We have advanced a day
+		  (cl-incf current-line)
+		  (setq current-day new-current-day)
+		  (save-excursion
                     (goto-char (point-max))
-                    (insert "\n" slotline))))
-              (let ((start-pos (get-start-pos current-line beg))
-                    (end-pos (get-end-pos current-line end)))
-                (put-text-property start-pos end-pos 'font-lock-face face)
-                (put-text-property start-pos end-pos 'org-timeline-occupied t))
-              (setq current-line 1)))
-          (buffer-string))))))
+                    (insert "\n" slotline)))
+
+		(let ((start-pos (get-start-pos current-line beg-in-day))
+		      (end-pos (get-end-pos current-line end-in-day)))
+		  (put-text-property start-pos end-pos 'font-lock-face face)
+		  (put-text-property start-pos end-pos 'org-timeline-occupied t)))))
+	  (buffer-string))))))
 
 (defun org-timeline-insert-timeline ()
   "Insert graphical timeline into agenda buffer."
