@@ -58,11 +58,16 @@
   :group 'org-timeline)
 
 (defface org-timeline-block
-  '((t (:inherit secondary-selection)))
+  '((t (:background "CadetBlue")))
   "Face used for printing blocks with time range information.
 
 These are blocks that are scheduled for specific time range or
 have an active timestamp with a range."
+  :group 'org-timeline-faces)
+
+(defface org-timeline-conflict
+  '((t (:background "OrangeRed")))
+  "Face used for printing conflicting blocks with time range information."
   :group 'org-timeline-faces)
 
 (defface org-timeline-elapsed
@@ -170,12 +175,16 @@ Return new copy of STRING."
 		  (save-excursion
                     (goto-char (point-max))
                     (insert "\n" slotline)))
-
+		
 		(let ((start-pos (get-start-pos current-line beg-in-day))
 		      (end-pos (get-end-pos current-line end-in-day)))
-		  (put-text-property start-pos end-pos 'font-lock-face face)
+		  (if (or (get-text-property (get-start-pos current-line beg-in-day) 'org-timeline-occupied)
+			  (get-text-property (get-start-pos current-line end-in-day) 'org-timeline-occupied))
+		      (put-text-property start-pos end-pos 'font-lock-face 'org-timeline-conflict)  ;; Warning face for conflicts
+		    (put-text-property start-pos end-pos 'font-lock-face face))
 		  (put-text-property start-pos end-pos 'org-timeline-occupied t)))))
 	  (buffer-string))))))
+
 
 (defun org-timeline-insert-timeline ()
   "Insert graphical timeline into agenda buffer."
