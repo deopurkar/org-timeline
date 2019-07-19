@@ -108,8 +108,9 @@ activated."
      ((save-excursion
         (search-forward "Clocked:" (line-end-position) t))
       'org-timeline-clocked)
+     ((face-at-point)
+      `((:background ,(face-attribute (face-at-point) ':foreground nil 'default))))
      (t 'org-timeline-block))))
-
 
 (defun org-timeline--add-elapsed-face (string current-offset)
   "Add `org-timeline-elapsed' to STRING's elapsed portion.
@@ -138,8 +139,6 @@ Return new copy of STRING."
       (-when-let* ((time-of-day (org-get-at-bol 'time-of-day))
                    (marker (org-get-at-bol 'org-marker))
                    (type (org-get-at-bol 'type)))
-	(message (number-to-string (second (org-get-at-bol 'date))))
-	(message (number-to-string (org-get-at-bol 'time-of-day)))
         (when (member type (list "scheduled" "clock" "timestamp"))
           (let ((duration (or (org-get-at-bol 'duration)
 			      org-timeline-default-duration
@@ -184,7 +183,6 @@ Return new copy of STRING."
 		    (put-text-property start-pos end-pos 'font-lock-face face))
 		  (put-text-property start-pos end-pos 'org-timeline-occupied t)))))
 	  (buffer-string))))))
-
 
 (defun org-timeline-insert-timeline ()
   "Insert graphical timeline into agenda buffer."
