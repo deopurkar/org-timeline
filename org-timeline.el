@@ -138,7 +138,9 @@ Return new copy of STRING."
     (org-timeline-with-each-line
       (-when-let* ((time-of-day (org-get-at-bol 'time-of-day))
                    (marker (org-get-at-bol 'org-marker))
-                   (type (org-get-at-bol 'type)))
+                   (type (org-get-at-bol 'type))
+		   (name (org-get-at-bol 'txt)))
+	(message name)
         (when (member type (list "scheduled" "clock" "timestamp"))
           (let ((duration (or (org-get-at-bol 'duration)
 			      org-timeline-default-duration
@@ -153,7 +155,7 @@ Return new copy of STRING."
                    (beg (+ (* day-of-month 1440) (* hour 60) minute))
                    (end (round (+ beg duration)))
                    (face (org-timeline--get-face)))
-	      (push (list beg end face) tasks))))))
+	      (push (list beg end face name) tasks))))))
 
     (setq tasks (nreverse tasks))
     (cl-labels ((get-start-pos (current-line beg) (+ 1 (* current-line (1+ (length hourline))) (/ (- beg start-offset) 10)))
@@ -163,7 +165,7 @@ Return new copy of STRING."
         (with-temp-buffer
           (insert hourline)
           (-each tasks
-            (-lambda ((beg end face))
+            (-lambda ((beg end face name))
 	      (let ((new-current-day (/ beg 1440))
 		    (beg-in-day (% beg 1440))
 		    (end-in-day (% end 1440)))
@@ -178,12 +180,14 @@ Return new copy of STRING."
                     (insert "\n" (calendar-day-name (mod current-day 7) t t) slotline)))
 		(let ((start-pos (get-start-pos current-line beg-in-day))
 		      (end-pos (get-end-pos current-line end-in-day)))
-		  (message (number-to-string (point-max)))
 		  (if (or (get-text-property (get-start-pos current-line beg-in-day) 'org-timeline-occupied)
 			  (get-text-property (get-start-pos current-line end-in-day) 'org-timeline-occupied))
 		      (put-text-property start-pos end-pos 'font-lock-face 'org-timeline-conflict)  ;; Warning face for conflicts
 		    (put-text-property start-pos end-pos 'font-lock-face face))
-		  (put-text-property start-pos end-pos 'org-timeline-occupied t)))))
+		  (put-text-property start-pos end-pos 'org-timeline-occupied t)
+		  (when name
+		    (put-text-property start-pos end-pos 'help-echo name))
+		  ))))
 	  (buffer-string))))))
 
 (defun org-timeline-insert-timeline ()
