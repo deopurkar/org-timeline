@@ -131,9 +131,9 @@ Return new copy of STRING."
                     "|     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |"
                     current-offset))
          (hourline (org-timeline--add-elapsed-face
-                    "|05:00|06:00|07:00|08:00|09:00|10:00|11:00|12:00|13:00|14:00|15:00|16:00|17:00|18:00|19:00|20:00|21:00|22:00|23:00|00:00|01:00|02:00|03:00|04:00|"
+                    "   |05:00|06:00|07:00|08:00|09:00|10:00|11:00|12:00|13:00|14:00|15:00|16:00|17:00|18:00|19:00|20:00|21:00|22:00|23:00|00:00|01:00|02:00|03:00|04:00|"
                     current-offset))
-         (timeline (concat hourline "\n" slotline))
+;         (timeline (concat hourline "\n" slotline))
          (tasks nil))
     (org-timeline-with-each-line
       (-when-let* ((time-of-day (org-get-at-bol 'time-of-day))
@@ -149,34 +149,36 @@ Return new copy of STRING."
 
             (let* ((hour (/ time-of-day 100))     ;; time-of-day is in HHMM notation
                    (minute (mod time-of-day 100))
-		   (day-of-month (second (org-get-at-bol 'date)))
+		   (day-of-month (calendar-absolute-from-gregorian (org-get-at-bol 'date)))
                    (beg (+ (* day-of-month 1440) (* hour 60) minute))
                    (end (round (+ beg duration)))
                    (face (org-timeline--get-face)))
 	      (push (list beg end face) tasks))))))
 
     (setq tasks (nreverse tasks))
-    (cl-labels ((get-start-pos (current-line beg) (+ 1 (* current-line (1+ (length slotline))) (/ (- beg start-offset) 10)))
-                (get-end-pos (current-line end) (+ 1 (* current-line (1+ (length slotline))) (/ (- end start-offset) 10))))
+    (cl-labels ((get-start-pos (current-line beg) (+ 1 (* current-line (1+ (length hourline))) (/ (- beg start-offset) 10)))
+                (get-end-pos (current-line end) (+ 1 (* current-line (1+ (length hourline))) (/ (- end start-offset) 10))))
       (let ((current-line 1)
 	    (current-day nil))
         (with-temp-buffer
-          (insert timeline)
+          (insert hourline)
           (-each tasks
             (-lambda ((beg end face))
 	      (let ((new-current-day (/ beg 1440))
 		    (beg-in-day (% beg 1440))
 		    (end-in-day (% end 1440)))
-		(when (not current-day) (setq current-day new-current-day))
+		(when (not current-day)
+		  (setq current-day new-current-day)
+		  (insert "\n" (calendar-day-name (mod current-day 7) t t) slotline))
 		(while (< current-day new-current-day)               ;; We have advanced a day
 		  (cl-incf current-line)
 		  (cl-incf current-day)
 		  (save-excursion
                     (goto-char (point-max))
-                    (insert "\n" slotline)))
-		
+                    (insert "\n" (calendar-day-name (mod current-day 7) t t) slotline)))
 		(let ((start-pos (get-start-pos current-line beg-in-day))
 		      (end-pos (get-end-pos current-line end-in-day)))
+		  (message (number-to-string (point-max)))
 		  (if (or (get-text-property (get-start-pos current-line beg-in-day) 'org-timeline-occupied)
 			  (get-text-property (get-start-pos current-line end-in-day) 'org-timeline-occupied))
 		      (put-text-property start-pos end-pos 'font-lock-face 'org-timeline-conflict)  ;; Warning face for conflicts
