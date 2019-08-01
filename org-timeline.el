@@ -123,7 +123,7 @@ Return new copy of STRING."
 
 (defun org-timeline--generate-timeline ()
   "Generate the timeline string that will represent current agenda view."
-  (let* ((start-offset 300)
+  (let* ((start-offset 270)
          (current-time (+ (* 60 (string-to-number (format-time-string "%H")))
                           (string-to-number (format-time-string "%M"))))
          (current-offset (/ (- current-time start-offset) 10))
