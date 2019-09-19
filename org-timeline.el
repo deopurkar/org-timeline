@@ -76,7 +76,7 @@ have an active timestamp with a range."
   :group 'org-timeline-faces)
 
 (defface org-timeline-clocked
-  '((t (:inherit highlight)))
+  '((t (:background "DarkOliveGreen")))
   "Face used for printing clocked blocks.
 
 Clocked blocks appear in the agenda when `org-agenda-log-mode' is
@@ -140,7 +140,6 @@ Return new copy of STRING."
                    (marker (org-get-at-bol 'org-marker))
                    (type (org-get-at-bol 'type))
 		   (name (org-get-at-bol 'txt)))
-	(message name)
         (when (member type (list "scheduled" "clock" "timestamp"))
           (let ((duration (or (org-get-at-bol 'duration)
 			      org-timeline-default-duration
@@ -192,6 +191,7 @@ Return new copy of STRING."
 
 (defun org-timeline-insert-timeline ()
   "Insert graphical timeline into agenda buffer."
+  (interactive)
   (unless (buffer-narrowed-p)
     (goto-char (point-min))
     (while (and (eq (get-text-property (line-beginning-position) 'org-agenda-type) 'agenda)
