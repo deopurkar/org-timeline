@@ -71,7 +71,7 @@ have an active timestamp with a range."
   :group 'org-timeline-faces)
 
 (defface org-timeline-elapsed
-  '((t (:inherit region)))
+  '((t (:inherit default)))
   "Face used for highlighting elapsed portion of the day."
   :group 'org-timeline-faces)
 
