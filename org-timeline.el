@@ -33,9 +33,7 @@
 
 ;; Scheduled tasks or tasks with time ranges are rendered in the
 ;; display with `org-timeline-block' face.  Clocked entires are
-;; displayed in `org-timeline-clocked' face.  The background of
-;; timeslots which are in the past is highlighted with
-;; `org-timeline-elapsed' face.
+;; displayed in `org-timeline-clocked' face.  
 
 ;; You can use custom color for a task by adding the property
 ;; `TIMELINE_FACE' with either a string which is a color name or a
@@ -91,7 +89,7 @@ have an active timestamp with a range."
 
 (defface org-timeline-elapsed
   '((t (:inherit region)))
-  "Face used for highlighting elapsed portion of the day."
+  "Face used for highlighting clocked items."
   :group 'org-timeline-faces)
 
 (defface org-timeline-clocked
@@ -126,14 +124,6 @@ activated."
       'org-timeline-clocked)
      (t 'org-timeline-block))))
 
-(defun org-timeline--add-elapsed-face (string current-offset)
-  "Add `org-timeline-elapsed' to STRING's elapsed portion.
-
-Return new copy of STRING."
-  (let ((string-copy (copy-sequence string)))
-    (when (< 0 current-offset)
-      (put-text-property 0 current-offset 'font-lock-face 'org-timeline-elapsed string-copy))
-    string-copy))
 
 (defun org-timeline--clear-info ()
   "Clear the info line"
@@ -205,16 +195,12 @@ Return new copy of STRING."
          (current-time (+ (* 60 (string-to-number (format-time-string "%H")))
                           (string-to-number (format-time-string "%M"))))
          (current-offset (/ (- current-time start-offset) 10))
-         (slotline (org-timeline--add-elapsed-face
-                    "|     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |"
-                    current-offset))
-         (hourline (org-timeline--add-elapsed-face
-                    (concat "   |"
+         (slotline "|     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |")
+         (hourline  (concat "   |"
                             (mapconcat (lambda (x) (format "%02d:00" (mod x 24)))
                                        (number-sequence org-timeline-start-hour (+ org-timeline-start-hour 23))
                                        "|")
-                            "|")
-                    (+ current-offset 4)))
+                            "|"))
          (tasks (org-timeline--list-tasks)))
     (cl-labels ((get-start-pos (current-line beg) (+ 5 (* current-line (1+ (length hourline))) (/ (- beg start-offset) 10)))
                 (get-end-pos (current-line end) (+ 5 (* current-line (1+ (length hourline))) (/ (- end start-offset) 10))))
