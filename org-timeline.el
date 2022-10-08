@@ -217,7 +217,13 @@ activated."
 		(setq current-day day)
 		(save-excursion
 		  (goto-char (point-max))
-		  (insert "\n" (calendar-day-name (floor (mod current-day 7)) t t) slotline)))		
+		  (let* ((day-of-the-week (mod current-day 7))
+			 (new-slotline
+			  (concat (calendar-day-name (floor day-of-the-week) t t)
+				  slotline)))
+		    (if (not (integerp day-of-the-week))
+			(put-text-property 0 (1- (length new-slotline)) 'font-lock-face 'org-timeline-elapsed new-slotline))
+		    (insert "\n" new-slotline))))
               (let ((start-pos (get-start-pos current-line beg))
                     (end-pos (get-end-pos current-line end))
                     (props (list 'font-lock-face face
