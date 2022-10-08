@@ -57,6 +57,25 @@
   "Faces for org-timeline."
   :group 'org-timeline)
 
+(defcustom org-timeline-prepend nil
+  "Option to prepend the timeline to the agenda."
+  :type 'boolean
+  :group 'org-timeline)
+
+(defcustom org-timeline-start-hour 5
+  "Starting hour of the timeline."
+  :type 'integer
+  :group 'org-timeline)
+
+(defvar org-timeline-first-line 0
+  "Computer first line of the timeline in the buffer.")
+
+(defvar org-timeline-height 0
+  "Computed height (number of lines) of the timeline.")
+
+(defconst org-timeline-current-info nil
+  "Current displayed info. Used to fix flickering of info.")
+
 (defface org-timeline-block
   '((t (:background "CadetBlue")))
   "Face used for printing blocks with time range information.
@@ -121,31 +140,56 @@ Return new copy of STRING."
       (put-text-property 0 current-offset 'font-lock-face 'org-timeline-elapsed string-copy))
     string-copy))
 
-(defun org-timeline--generate-timeline ()
-  "Generate the timeline string that will represent current agenda view."
-  (let* ((start-offset 260)
+(defun org-timeline--clear-info ()
+  "Clear the info line"
+  (save-excursion
+    (goto-line org-timeline-first-line)
+    (forward-line (- org-timeline-height 1))
+    (let ((inhibit-read-only t))
+      (while (not (get-text-property (point) 'org-timeline-end))
+        (kill-whole-line)))))
+
+(defun org-timeline--hover-info (win txt)
+  "Displays info about a hovered block"
+  (unless (eq txt org-timeline-current-info)
+    (setq org-timeline-current-info txt)
+    (save-window-excursion
+      (save-excursion
+        (select-window win)
+        (org-timeline--clear-info)
+        (goto-line org-timeline-first-line)
+        (forward-line (- org-timeline-height 1))
+        (let ((inhibit-read-only t))
+          (insert txt)
+          (insert "\n"))))))
+
+(defun org-timeline--move-to-task ()
+  "Move to a blocks correponding task."
+  (interactive
+   (let ((line (get-text-property (point) 'org-timeline-task-line)))
+     (org-timeline--clear-info)
+     (when org-timeline-prepend
+       (setq line (+ line org-timeline-height)))
+     (goto-line line)
+     (search-forward (get-text-property (point) 'time)))))
+
+(defun org-timeline--list-tasks ()
+  "Build the list of tasks to display."
+  (let* ((tasks nil)
+         (start-offset (* org-timeline-start-hour 60))
          (current-time (+ (* 60 (string-to-number (format-time-string "%H")))
-                          (string-to-number (format-time-string "%M"))))
-         (current-offset (/ (- current-time start-offset) 10))
-         (slotline (org-timeline--add-elapsed-face
-                    "|     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |"
-                    current-offset))
-         (hourline (org-timeline--add-elapsed-face
-                    "   |05:00|06:00|07:00|08:00|09:00|10:00|11:00|12:00|13:00|14:00|15:00|16:00|17:00|18:00|19:00|20:00|21:00|22:00|23:00|00:00|01:00|02:00|03:00|04:00|"
-                    current-offset))
-;         (timeline (concat hourline "\n" slotline))
-         (tasks nil))
+                          (string-to-number (format-time-string "%M")))))
     (org-timeline-with-each-line
       (-when-let* ((time-of-day (org-get-at-bol 'time-of-day))
                    (marker (org-get-at-bol 'org-marker))
                    (type (org-get-at-bol 'type))
 		   (name (org-get-at-bol 'txt)))
         (when (member type (list "scheduled" "clock" "timestamp"))
-          (let ((duration (or (org-get-at-bol 'duration)
-			      org-timeline-default-duration
-			      0)))
-            (when (and (numberp duration)            
-                       (< duration 0))            ;; This is events at midnight
+          (let ((duration (org-get-at-bol 'duration))
+                (txt (buffer-substring (line-beginning-position) (line-end-position)))
+                (line (line-number-at-pos)))
+            (when (and (numberp duration)
+                       (< duration 0))
               (cl-incf duration 1440))
 
             (let* ((hour (/ time-of-day 100))     ;; time-of-day is in HHMM notation
@@ -154,53 +198,76 @@ Return new copy of STRING."
                    (beg (+ (* day-of-month 1440) (* hour 60) minute))
                    (end (round (+ beg duration)))
                    (face (org-timeline--get-face)))
-	      (push (list beg end face name) tasks))))))
+              (when (>= beg start-offset)
+                (push (list beg end face txt line) tasks)))))))
+    (nreverse tasks)))
 
-    (setq tasks (nreverse tasks))
-    (cl-labels ((get-start-pos (current-line beg) (+ 1 (* current-line (1+ (length hourline))) (/ (- beg start-offset) 10)))
-                (get-end-pos (current-line end) (+ 1 (* current-line (1+ (length hourline))) (/ (- end start-offset) 10))))
+(defun org-timeline--generate-timeline ()
+  "Generate the timeline string that will represent current agenda view."
+  (let* ((start-offset (* org-timeline-start-hour 60))
+         (current-time (+ (* 60 (string-to-number (format-time-string "%H")))
+                          (string-to-number (format-time-string "%M"))))
+         (current-offset (/ (- current-time start-offset) 10))
+         (slotline (org-timeline--add-elapsed-face
+                    "|     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |"
+                    current-offset))
+         (hourline (org-timeline--add-elapsed-face
+                    (concat "|"
+                            (mapconcat (lambda (x) (format "%02d:00" (mod x 24)))
+                                       (number-sequence org-timeline-start-hour (+ org-timeline-start-hour 23))
+                                       "|")
+                            "|")
+                    current-offset))
+         (timeline (concat hourline "\n" slotline))
+         (tasks (org-timeline--list-tasks)))
+    (cl-labels ((get-start-pos (current-line beg) (+ 1 (* current-line (1+ (length slotline))) (/ (- beg start-offset) 10)))
+                (get-end-pos (current-line end) (+ 1 (* current-line (1+ (length slotline))) (/ (- end start-offset) 10))))
       (let ((current-line 1)
-	    (current-day nil))
+            (move-to-task-map (make-sparse-keymap)))
+        (define-key move-to-task-map [mouse-1] 'org-timeline--move-to-task)
         (with-temp-buffer
           (insert hourline)
           (-each tasks
-            (-lambda ((beg end face name))
-	      (let ((new-current-day (/ beg 1440))
-		    (beg-in-day (% beg 1440))
-		    (end-in-day (% end 1440)))
-		(when (not current-day)
-		  (setq current-day new-current-day)
-		  (insert "\n" (calendar-day-name (mod current-day 7) t t) slotline))
-		(while (< current-day new-current-day)               ;; We have advanced a day
-		  (cl-incf current-line)
-		  (cl-incf current-day)
-		  (save-excursion
+            (-lambda ((beg end face txt line))
+              (while (get-text-property (get-start-pos current-line beg) 'org-timeline-occupied)
+                (cl-incf current-line)
+                (when (> (get-start-pos current-line beg) (point-max))
+                  (save-excursion
                     (goto-char (point-max))
-                    (insert "\n" (calendar-day-name (mod current-day 7) t t) slotline)))
-		(let ((start-pos (get-start-pos current-line beg-in-day))
-		      (end-pos (get-end-pos current-line end-in-day)))
-		  (if (or (get-text-property (get-start-pos current-line beg-in-day) 'org-timeline-occupied)
-			  (get-text-property (get-start-pos current-line end-in-day) 'org-timeline-occupied))
-		      (put-text-property start-pos end-pos 'font-lock-face 'org-timeline-conflict)  ;; Warning face for conflicts
-		    (put-text-property start-pos end-pos 'font-lock-face face))
-		  (put-text-property start-pos end-pos 'org-timeline-occupied t)
-		  (when name
-		    (put-text-property start-pos end-pos 'help-echo name))
-		  ))))
-	  (buffer-string))))))
+                    (insert "\n" slotline))))
+              (let ((start-pos (get-start-pos current-line beg))
+                    (end-pos (get-end-pos current-line end))
+                    (props (list 'font-lock-face face
+                                 'org-timeline-occupied t
+                                 'mouse-face 'highlight
+                                 'keymap move-to-task-map
+                                 'txt txt
+                                 'help-echo (lambda (w obj pos)
+                                              (org-timeline--hover-info w txt)
+                                              txt) ;; the lambda will be called on block hover
+                                 'org-timeline-task-line line
+                                 'cursor-sensor-functions '(org-timeline--display-info))))
+                (add-text-properties start-pos end-pos props))
+              (setq current-line 1)))
+          (buffer-string))))))
 
+;;;###autoload
 (defun org-timeline-insert-timeline ()
   "Insert graphical timeline into agenda buffer."
   (interactive)
   (unless (buffer-narrowed-p)
     (goto-char (point-min))
-    (while (and (eq (get-text-property (line-beginning-position) 'org-agenda-type) 'agenda)
-                (not (eobp)))
-      (forward-line))
+    (unless org-timeline-prepend
+      (while (and (eq (get-text-property (line-beginning-position) 'org-agenda-type) 'agenda)
+                  (not (eobp)))
+        (forward-line)))
     (forward-line)
     (let ((inhibit-read-only t))
+      (cursor-sensor-mode 1)
+      (setq org-timeline-first-line (line-number-at-pos))
       (insert (org-timeline--generate-timeline))
-      (insert (propertize (concat "\n" (make-string (/ (window-width) 2) ?─)) 'face 'org-time-grid) "\n"))
+      (insert (propertize (concat "\n" (make-string (/ (window-width) 2) ?─)) 'face 'org-time-grid 'org-timeline-end t) "\n")
+      (setq org-timeline-height (- (line-number-at-pos) org-timeline-first-line)))
     ;; enable `font-lock-mode' in agenda view to display the "chart"
     (font-lock-mode)))
 
