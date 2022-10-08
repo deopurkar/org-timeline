@@ -57,6 +57,11 @@
   "Faces for org-timeline."
   :group 'org-timeline)
 
+(defcustom org-timeline-default-duration 60
+  "Default event duration in minutes"
+  :type 'integer
+  :group 'org-timeline)
+
 (defcustom org-timeline-prepend nil
   "Option to prepend the timeline to the agenda."
   :type 'boolean
@@ -182,10 +187,11 @@ Return new copy of STRING."
               (cl-incf duration 1440))
             (let* ((hour (/ time-of-day 100))
                    (minute (mod time-of-day 100))
-                   (beg (+ (* hour 60) minute))
+		   (day-of-month (calendar-absolute-from-gregorian (org-get-at-bol 'date)))
+                   (beg (+ (* day-of-month 1440) (* hour 60) minute))
                    (end (if duration
                             (round (+ beg duration))
-                          current-time))
+                          org-timeline-default-duration))
                    (face (org-timeline--get-face)))
               (when (>= beg start-offset)
                 (push (list beg end face txt line) tasks)))))))
@@ -201,31 +207,33 @@ Return new copy of STRING."
                     "|     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |"
                     current-offset))
          (hourline (org-timeline--add-elapsed-face
-                    (concat "|"
+                    (concat "    |"
                             (mapconcat (lambda (x) (format "%02d:00" (mod x 24)))
                                        (number-sequence org-timeline-start-hour (+ org-timeline-start-hour 23))
                                        "|")
                             "|")
-                    current-offset))
-         (timeline (concat hourline "\n" slotline))
+                    (+ current-offset 4)))
          (tasks (org-timeline--list-tasks)))
-    (cl-labels ((get-start-pos (current-line beg) (+ 1 (* current-line (1+ (length slotline))) (/ (- beg start-offset) 10)))
-                (get-end-pos (current-line end) (+ 1 (* current-line (1+ (length slotline))) (/ (- end start-offset) 10))))
-      (let ((current-line 1)
+    (cl-labels ((get-start-pos (current-line beg) (+ 1 (* current-line (1+ (length hourline))) (/ (- beg start-offset) 10)))
+                (get-end-pos (current-line end) (+ 1 (* current-line (1+ (length hourline))) (/ (- end start-offset) 10))))
+      (let ((current-line 0)
+	    (current-day nil)
             (move-to-task-map (make-sparse-keymap)))
         (define-key move-to-task-map [mouse-1] 'org-timeline--move-to-task)
         (with-temp-buffer
-          (insert timeline)
+          (insert hourline)
           (-each tasks
             (-lambda ((beg end face txt line))
-              (while (get-text-property (get-start-pos current-line beg) 'org-timeline-occupied)
-                (cl-incf current-line)
-                (when (> (get-start-pos current-line beg) (point-max))
-                  (save-excursion
-                    (goto-char (point-max))
-                    (insert "\n" slotline))))
-              (let ((start-pos (get-start-pos current-line beg))
-                    (end-pos (get-end-pos current-line end))
+	      (let ((new-day (/ beg 1440)))
+		(when (or (not current-day) (> new-day current-day))
+		  (cl-incf current-line)
+		  (setq current-day new-day)
+		  (save-excursion
+		    (goto-char (point-max))
+		    (insert "\n" (calendar-day-name (mod current-day 7) t t) slotline))
+		  ))
+              (let ((start-pos (get-start-pos current-line (% beg 1440)))
+                    (end-pos (get-end-pos current-line (% end 1440)))
                     (props (list 'font-lock-face face
                                  'org-timeline-occupied t
                                  'mouse-face 'highlight
@@ -236,8 +244,7 @@ Return new copy of STRING."
                                               txt) ;; the lambda will be called on block hover
                                  'org-timeline-task-line line
                                  'cursor-sensor-functions '(org-timeline--display-info))))
-                (add-text-properties start-pos end-pos props))
-              (setq current-line 1)))
+                (add-text-properties start-pos end-pos props))))
           (buffer-string))))))
 
 ;;;###autoload
