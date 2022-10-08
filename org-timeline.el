@@ -187,15 +187,17 @@ Return new copy of STRING."
               (cl-incf duration 1440))
             (let* ((hour (/ time-of-day 100))
                    (minute (mod time-of-day 100))
-		   (day-of-month (calendar-absolute-from-gregorian (org-get-at-bol 'date)))
-                   (beg (+ (* day-of-month 1440) (* hour 60) minute))
+		   (day (+ (calendar-absolute-from-gregorian (org-get-at-bol 'date))
+			   (if (equal type "clock") 0.5 0)
+			   ))
+                   (beg (+ (* hour 60) minute))
                    (end (if duration
                             (round (+ beg duration))
                           org-timeline-default-duration))
                    (face (org-timeline--get-face)))
               (when (>= beg start-offset)
-                (push (list beg end face txt line) tasks)))))))
-    (nreverse tasks)))
+                (push (list beg end face txt line day) tasks)))))))
+    (sort tasks (lambda (x y) (< (car (last x)) (car (last y)))))))
 
 (defun org-timeline--generate-timeline ()
   "Generate the timeline string that will represent current agenda view."
@@ -207,15 +209,15 @@ Return new copy of STRING."
                     "|     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |     |"
                     current-offset))
          (hourline (org-timeline--add-elapsed-face
-                    (concat "    |"
+                    (concat "   |"
                             (mapconcat (lambda (x) (format "%02d:00" (mod x 24)))
                                        (number-sequence org-timeline-start-hour (+ org-timeline-start-hour 23))
                                        "|")
                             "|")
                     (+ current-offset 4)))
          (tasks (org-timeline--list-tasks)))
-    (cl-labels ((get-start-pos (current-line beg) (+ 1 (* current-line (1+ (length hourline))) (/ (- beg start-offset) 10)))
-                (get-end-pos (current-line end) (+ 1 (* current-line (1+ (length hourline))) (/ (- end start-offset) 10))))
+    (cl-labels ((get-start-pos (current-line beg) (+ 5 (* current-line (1+ (length hourline))) (/ (- beg start-offset) 10)))
+                (get-end-pos (current-line end) (+ 5 (* current-line (1+ (length hourline))) (/ (- end start-offset) 10))))
       (let ((current-line 0)
 	    (current-day nil)
             (move-to-task-map (make-sparse-keymap)))
@@ -223,17 +225,15 @@ Return new copy of STRING."
         (with-temp-buffer
           (insert hourline)
           (-each tasks
-            (-lambda ((beg end face txt line))
-	      (let ((new-day (/ beg 1440)))
-		(when (or (not current-day) (> new-day current-day))
-		  (cl-incf current-line)
-		  (setq current-day new-day)
-		  (save-excursion
-		    (goto-char (point-max))
-		    (insert "\n" (calendar-day-name (mod current-day 7) t t) slotline))
-		  ))
-              (let ((start-pos (get-start-pos current-line (% beg 1440)))
-                    (end-pos (get-end-pos current-line (% end 1440)))
+            (-lambda ((beg end face txt line day))
+	      (when (or (not current-day) (> day current-day))
+		(cl-incf current-line)
+		(setq current-day day)
+		(save-excursion
+		  (goto-char (point-max))
+		  (insert "\n" (calendar-day-name (floor (mod current-day 7)) t t) slotline)))		
+              (let ((start-pos (get-start-pos current-line beg))
+                    (end-pos (get-end-pos current-line end))
                     (props (list 'font-lock-face face
                                  'org-timeline-occupied t
                                  'mouse-face 'highlight
