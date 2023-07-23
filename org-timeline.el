@@ -181,9 +181,8 @@ activated."
 			   (if (equal type "clock") 0.5 0)
 			   ))
                    (beg (+ (* hour 60) minute))
-                   (end (if duration
-                            (round (+ beg duration))
-                          org-timeline-default-duration))
+                   (end (round (+ beg (or duration
+					  org-timeline-default-duration))))
                    (face (org-timeline--get-face)))
               (when (>= beg start-offset)
                 (push (list beg end face txt line day) tasks)))))))
