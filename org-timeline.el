@@ -336,7 +336,8 @@ WIN is the agenda buffer's window."
       (-when-let* ((time-of-day (org-get-at-bol 'time-of-day))
                    (marker (org-get-at-bol 'org-marker))
                    (type (org-get-at-bol 'type))
-                   (duration (org-get-at-bol 'duration)))
+                   (duration (or (org-get-at-bol 'duration)
+				 org-timeline-default-duration)))
         (when (member type (list "past-scheduled" "scheduled" "clock" "timestamp"))
           (when (and (numberp duration)
                      (< duration 0))
@@ -344,10 +345,8 @@ WIN is the agenda buffer's window."
           (let* ((hour (/ time-of-day 100))
                  (minute (mod time-of-day 100))
                  (beg (+ (* hour 60) minute))
-                 (end (if duration
-                          (round (+ beg duration))
-                        current-time)))
-            (setq beg (max beg start-offset))
+                 (end (round (+ beg duration))))
+	    (setq beg (max beg start-offset))
             (setq end (min end (+ start-offset (* 24 60))))
             (setq duration (- end beg))
             (when (eq end (* 24 60)) (cl-incf end -1)) ; FIXME fixes a bug that shouldn't happen (crash when events end at midnight).
